@@ -1,18 +1,14 @@
 {
-  "name": "mini-query-runtime",
-  "version": "1.0.0",
-  "type": "module",
+  "name": "query-runtime-monorepo",
+  "private": true,
+  "packageManager": "npm@10.9.3",
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js"
+    "dev": "turbo run dev",
+    "build": "turbo run build"
   },
   "devDependencies": {
-    "@types/react": "^19.2.14",
+    "turbo": "^2.0.0",
     "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "vue": "^3.5.32"
   }
 }

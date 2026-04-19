@@ -1,0 +1,50 @@
+import { onMounted, onUnmounted, shallowRef } from 'vue'
+import {
+  fetchQuery,
+  getOrCreateState,
+  mountQueryObserver,
+  resolveQueryConfig,
+  subscribeToQuery
+} from '@query/core'
+import { unmountQueryObserver } from '@query/core'
+import type { QueryDefinition, QueryState } from '@query/core'
+
+function syncStateToRefs<TData>(
+  state: QueryState<TData>,
+  data: { value: TData | undefined },
+  isLoading: { value: boolean },
+  error: { value: unknown }
+): void {
+  data.value = state.data
+  isLoading.value = state.status === 'loading'
+  error.value = state.error
+}
+
+export function useQuery<TData>(queryDefinition: QueryDefinition<TData>) {
+  const config = resolveQueryConfig(queryDefinition.policy, queryDefinition.config)
+  const state = getOrCreateState<TData>(queryDefinition.key, config)
+
+  const data = shallowRef<TData | undefined>(state.data)
+  const isLoading = shallowRef(state.status === 'loading')
+  const error = shallowRef<unknown>(state.error)
+
+  const unsubscribe = subscribeToQuery(state, () => {
+    syncStateToRefs(state, data, isLoading, error)
+  })
+
+  onMounted(() => {
+    mountQueryObserver(queryDefinition, state)
+  })
+
+  onUnmounted(() => {
+    unsubscribe()
+    unmountQueryObserver(state, queryDefinition.key)
+  })
+
+  return {
+    data,
+    isLoading,
+    error,
+    refetch: () => fetchQuery(state, queryDefinition.fetcher)
+  }
+}
