@@ -2,7 +2,7 @@ import { fetchQuery } from './fetchQuery.js'
 import { revive } from './gc.js'
 import type { QueryDefinition, QueryState } from './types.js'
 
-function isStale(state: QueryState): boolean {
+export function isQueryStale(state: QueryState): boolean {
   if (state.lastFetchedAt === 0) {
     return true
   }
@@ -23,7 +23,7 @@ export async function ensureFresh<TData>(
   }
 
   // CASE3: If the data is stale or not fetched yet, fetch it
-  if (isStale(state)) {
+  if (isQueryStale(state)) {
     return fetchQuery(state, queryDefinition.fetcher)
   } else {
     return state.data

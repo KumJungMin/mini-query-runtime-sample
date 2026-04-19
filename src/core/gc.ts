@@ -1,16 +1,14 @@
 import type { QueryState } from './types.js'
 import { getQueryKeyString, queryMap } from './queryStore.js'
 
-type TimerWithUnref = {
+type TimerHandleWithUnref = {
   unref: () => void
 }
 
 export function scheduleGC(state: QueryState, key: readonly unknown[]): void {
   const keyString = getQueryKeyString(key)
 
-  if (state.gcTimeoutId) {
-    clearTimeout(state.gcTimeoutId)
-  }
+  cancelScheduledGC(state)
 
   if (state.cacheTime === Infinity) {
     state.gcTimeoutId = undefined
@@ -25,6 +23,14 @@ export function scheduleGC(state: QueryState, key: readonly unknown[]): void {
   }
 }
 
+export function cancelScheduledGC(state: QueryState): void {
+  if (!state.gcTimeoutId) {
+    return
+  }
+  clearTimeout(state.gcTimeoutId)
+  state.gcTimeoutId = undefined
+}
+
 /** 
  * detachTimerIfPossible function
  * Keep the GC timer scheduled, but do not let it keep the Node.js process alive.
@@ -35,12 +41,12 @@ function detachTimerIfPossible(timeoutId: ReturnType<typeof setTimeout>): void {
   }
 }
 
-function hasUnref(timeoutId: unknown): timeoutId is TimerWithUnref {
+function hasUnref(timeoutId: unknown): timeoutId is TimerHandleWithUnref {
   return (
     typeof timeoutId === 'object' &&
     timeoutId !== null &&
     'unref' in timeoutId &&
-    typeof (timeoutId as TimerWithUnref).unref === 'function'
+    typeof (timeoutId as TimerHandleWithUnref).unref === 'function'
   )
 }
 
@@ -50,10 +56,6 @@ function hasUnref(timeoutId: unknown): timeoutId is TimerWithUnref {
  *   which means we want to prevent it from being garbage collected.
  * */ 
 export function revive(state: QueryState, key: readonly unknown[]): void {
-  if (state.gcTimeoutId) {
-    clearTimeout(state.gcTimeoutId)
-    state.gcTimeoutId = undefined
-  }
-
+  cancelScheduledGC(state)
   scheduleGC(state, key)
 }

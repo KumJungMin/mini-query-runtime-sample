@@ -2,6 +2,8 @@ export type QueryStatus = 'idle' | 'loading' | 'success' | 'error'
 
 export type QueryPolicy = 'static' | 'normal' | 'background' | 'critical'
 
+export type QueryListener = () => void
+
 export type QueryState<TData = unknown> = {
   data?: TData
   status: QueryStatus
@@ -12,6 +14,8 @@ export type QueryState<TData = unknown> = {
   promise?: Promise<TData>
   cacheTime: number
   gcTimeoutId?: ReturnType<typeof setTimeout>
+  listeners: Set<QueryListener>
+  revision: number
 }
 
 export type QueryDefinition<TData> = {

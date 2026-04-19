@@ -1,4 +1,4 @@
-import type { QueryState, QueryStateConfig } from './types.js'
+import type { QueryListener, QueryState, QueryStateConfig } from './types.js'
 
 export const queryMap = new Map<string, QueryState>()
 
@@ -19,6 +19,8 @@ export function getOrCreateState<TData>(
   const existingState = queryMap.get(keyStr)
 
   if (existingState) {
+    existingState.staleTime = config.staleTime
+    existingState.cacheTime = config.cacheTime
     return existingState as QueryState<TData>
   }
 
@@ -27,9 +29,30 @@ export function getOrCreateState<TData>(
     lastFetchedAt: 0,
     staleTime: config.staleTime,
     cacheTime: config.cacheTime,
-    observers: 0
+    observers: 0,
+    listeners: new Set(),
+    revision: 0
   }
 
   queryMap.set(keyStr, state)
   return state
+}
+
+export function notifyQueryListeners(state: QueryState): void {
+  state.revision += 1
+
+  for (const listener of state.listeners) {
+    listener()
+  }
+}
+
+export function subscribeToQuery(
+  state: QueryState,
+  listener: QueryListener
+): () => void {
+  state.listeners.add(listener)
+
+  return () => {
+    state.listeners.delete(listener)
+  }
 }
