@@ -1,32 +1,34 @@
-import { isQueryStale } from './ensureFresh.js'
 import { fetchQuery } from './fetchQuery.js'
+import { hasFetchedQuery, isQueryStale } from './queryFreshness.js'
 import { cancelScheduledGC, scheduleGC } from './gc.js'
-import { resolveQueryConfig } from './policies.js'
-import type { QueryDefinition, QueryState } from './types.js'
+import type { QueryState } from './types.js'
+import {
+  acquireWindowFocusRefetch,
+  releaseWindowFocusRefetch
+} from './windowFocusRefetch.js'
 
-export function mountQueryObserver<TData>(
-  queryDefinition: QueryDefinition<TData>,
-  state: QueryState<TData>
-): void {
+export function mountQueryObserver<TData>(state: QueryState<TData>): void {
   state.observers += 1
   cancelScheduledGC(state)
+  acquireWindowFocusRefetch()
 
-  const config = resolveQueryConfig(queryDefinition.policy, queryDefinition.config)
-
-  if (!config.autoRefetch || !isQueryStale(state)) {
+  if (!hasFetchedQuery(state)) {
+    void fetchQuery(state).catch(() => undefined)
     return
   }
 
-  void fetchQuery(state, queryDefinition.fetcher).catch(() => undefined)
+  if (!state.refetchOnMount || !isQueryStale(state)) {
+    return
+  }
+
+  void fetchQuery(state).catch(() => undefined)
 }
 
-export function unmountQueryObserver(
-  state: QueryState,
-  key: readonly unknown[]
-): void {
+export function unmountQueryObserver(state: QueryState): void {
   state.observers = Math.max(0, state.observers - 1)
+  releaseWindowFocusRefetch()
 
   if (state.observers === 0) {
-    scheduleGC(state, key)
+    scheduleGC(state)
   }
 }

@@ -1,5 +1,6 @@
 import { onMounted, onUnmounted, shallowRef } from 'vue'
 import {
+  createQueryStateConfig,
   fetchQuery,
   getOrCreateState,
   mountQueryObserver,
@@ -20,9 +21,17 @@ function syncStateToRefs<TData>(
   error.value = state.error
 }
 
-export function useQuery<TData>(queryDefinition: QueryDefinition<TData>) {
-  const config = resolveQueryConfig(queryDefinition.policy, queryDefinition.config)
-  const state = getOrCreateState<TData>(queryDefinition.key, config)
+export function useQuery<TQueryFnData, TData>(
+  queryDefinition: QueryDefinition<TQueryFnData, TData>
+) {
+  const resolvedConfig = resolveQueryConfig(
+    queryDefinition.policy,
+    queryDefinition.config
+  )
+  const state = getOrCreateState(
+    queryDefinition,
+    createQueryStateConfig(queryDefinition, resolvedConfig)
+  )
 
   const data = shallowRef<TData | undefined>(state.data)
   const isLoading = shallowRef(state.status === 'loading')
@@ -33,18 +42,18 @@ export function useQuery<TData>(queryDefinition: QueryDefinition<TData>) {
   })
 
   onMounted(() => {
-    mountQueryObserver(queryDefinition, state)
+    mountQueryObserver(state)
   })
 
   onUnmounted(() => {
     unsubscribe()
-    unmountQueryObserver(state, queryDefinition.key)
+    unmountQueryObserver(state)
   })
 
   return {
     data,
     isLoading,
     error,
-    refetch: () => fetchQuery(state, queryDefinition.fetcher)
+    refetch: () => fetchQuery(state)
   }
 }

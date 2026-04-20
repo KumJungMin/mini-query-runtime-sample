@@ -1,10 +1,7 @@
 import { notifyQueryListeners } from './queryStore.js'
 import type { QueryState } from './types.js'
 
-export async function fetchQuery<TData>(
-  state: QueryState<TData>,
-  fetcher: () => Promise<TData>
-): Promise<TData> {
+export async function fetchQuery<TData>(state: QueryState<TData>): Promise<TData> {
   if (state.promise) {
     return state.promise
   }
@@ -13,7 +10,7 @@ export async function fetchQuery<TData>(
   state.error = undefined
 
   const promise = Promise.resolve()
-    .then(fetcher)
+    .then(state.fetcher)
     .then((data) => {
       state.data = data
       state.status = 'success'

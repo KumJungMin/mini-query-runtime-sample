@@ -32,4 +32,4 @@ export type QueryDebugController<TData> = {
   clearLogs: () => void
 }
 
-export type DemoQuery<TData> = QueryDefinition<TData>
+export type DemoQuery<TData> = QueryDefinition<unknown, TData>

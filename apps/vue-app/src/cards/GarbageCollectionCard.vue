@@ -32,7 +32,7 @@ function handleToggleMounted() {
 
 <template>
   <section :style="cardStyle">
-    <h2 :style="titleStyle">5. cacheTime + Garbage Collection</h2>
+    <h2 :style="titleStyle">5. gcTime + Garbage Collection</h2>
     <p :style="descriptionStyle">
       Unmount the consumer to start GC. Remount before the countdown ends to
       reuse cache. Remount after deletion to force a new fetch.

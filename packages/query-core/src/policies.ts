@@ -3,23 +3,27 @@ import type { QueryPolicy, QueryPolicyConfig } from './types.js'
 export const policyMap: Record<QueryPolicy, QueryPolicyConfig> = {
   static: {
     staleTime: Infinity,
-    cacheTime: Infinity,
-    autoRefetch: false
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false
   },
   normal: {
     staleTime: 5 * 60 * 1000,
-    cacheTime: 5 * 60 * 1000,
-    autoRefetch: true
+    gcTime: 5 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true
   },
   background: {
-    staleTime: 60 * 1000,
-    cacheTime: 5 * 60 * 1000,
-    autoRefetch: true
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true
   },
   critical: {
     staleTime: 0,
-    cacheTime: 0,
-    autoRefetch: false
+    gcTime: 0,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false
   }
 }
 

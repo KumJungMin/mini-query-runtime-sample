@@ -1,6 +1,7 @@
 import {
+  createQueryStateConfig,
+  fetchQuery,
   PRELOAD_EXAMPLE_QUERY,
-  ensureFresh,
   getOrCreateState,
   resolveQueryConfig
 } from '@query/core'
@@ -34,34 +35,40 @@ function PreloadedPage() {
   )
 }
 
-export function EnsureFreshCard() {
+export function PreloadRefetchCard() {
   const [pageMounted, setPageMounted] = useState(false)
   const [warmCacheReady, setWarmCacheReady] = useState(false)
   const { debug, logs, addLog, clearLogs } = useQueryDebugCard(PRELOAD_EXAMPLE_QUERY)
 
   async function handlePreload() {
-    addLog('[UI] preload with ensureFresh')
-    const config = resolveQueryConfig(
+    addLog('[UI] preload with refetch')
+    const resolvedConfig = resolveQueryConfig(
       PRELOAD_EXAMPLE_QUERY.policy,
       PRELOAD_EXAMPLE_QUERY.config
     )
-    const state = getOrCreateState(PRELOAD_EXAMPLE_QUERY.key, config)
-    await ensureFresh(PRELOAD_EXAMPLE_QUERY, state)
+    const state = getOrCreateState(
+      PRELOAD_EXAMPLE_QUERY,
+      createQueryStateConfig(PRELOAD_EXAMPLE_QUERY, resolvedConfig)
+    )
+    const refetch = () => fetchQuery(state)
+
+    await refetch()
     setWarmCacheReady(true)
-    addLog('[ensureFresh] preload complete, cache is warm')
+    addLog('[refetch] preload complete, cache is warm')
   }
 
   return (
     <section style={cardStyle}>
-      <h2 style={sectionTitleStyle}>4. ensureFresh Preload (Warm Cache)</h2>
+      <h2 style={sectionTitleStyle}>4. Refetch Preload (Warm Cache)</h2>
       <p style={descriptionStyle}>
         Preload data first, then mount the page component. When the cache is
         warm and still fresh, the page can render data immediately without an
-        initial loading state.
+        initial loading state. If the cache becomes stale before mount,
+        `refetchOnMount` triggers the next request automatically.
       </p>
       <div style={buttonRowStyle}>
         <button style={buttonStyle} onClick={() => void handlePreload()}>
-          Preload (ensureFresh)
+          Preload (refetch)
         </button>
         <button
           style={buttonStyle}
@@ -78,6 +85,7 @@ export function EnsureFreshCard() {
           <Badge tone="success">warm cache</Badge>
         ) : null}
         <Badge tone="info">staleTime: 5 seconds</Badge>
+        <Badge tone="info">refetchOnMount: true</Badge>
       </div>
       {pageMounted ? <PreloadedPage /> : <p>Page is not mounted yet.</p>}
       <DebugPanel debug={debug} />

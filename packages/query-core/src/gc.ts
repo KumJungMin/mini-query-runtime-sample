@@ -5,12 +5,12 @@ type TimerHandleWithUnref = {
   unref: () => void
 }
 
-export function scheduleGC(state: QueryState, key: readonly unknown[]): void {
-  const keyString = getQueryKeyString(key)
+export function scheduleGC(state: QueryState): void {
+  const keyString = getQueryKeyString(state.key)
 
   cancelScheduledGC(state)
 
-  if (state.cacheTime === Infinity) {
+  if (state.gcTime === Infinity) {
     state.gcTimeoutId = undefined
     state.gcScheduledAt = undefined
     state.gcExpiresAt = undefined
@@ -18,12 +18,12 @@ export function scheduleGC(state: QueryState, key: readonly unknown[]): void {
   }
 
   state.gcScheduledAt = Date.now()
-  state.gcExpiresAt = state.gcScheduledAt + state.cacheTime
+  state.gcExpiresAt = state.gcScheduledAt + state.gcTime
   state.gcTimeoutId = setTimeout(() => {
     if (state.observers === 0) {
       queryMap.delete(keyString)
     }
-  }, state.cacheTime)
+  }, state.gcTime)
 
   detachTimerIfPossible(state.gcTimeoutId)
 }
@@ -54,9 +54,4 @@ function hasUnref(timeoutId: unknown): timeoutId is TimerHandleWithUnref {
     'unref' in timeoutId &&
     typeof (timeoutId as TimerHandleWithUnref).unref === 'function'
   )
-}
-
-export function revive(state: QueryState, key: readonly unknown[]): void {
-  cancelScheduledGC(state)
-  scheduleGC(state, key)
 }

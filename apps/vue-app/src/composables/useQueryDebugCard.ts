@@ -42,7 +42,7 @@ function createLogEntry(message: string): LogEntry {
 }
 
 export function useQueryDebugCard<TData extends { requestId?: number; value?: number }>(
-  queryDefinition: QueryDefinition<TData>
+  queryDefinition: QueryDefinition<unknown, TData>
 ) {
   const logs = ref<LogEntry[]>([])
   const tick = ref(0)
@@ -171,9 +171,9 @@ export function useQueryDebugCard<TData extends { requestId?: number; value?: nu
       if (
         previousSnapshot.gcExpiresAt == null &&
         currentSnapshot.gcExpiresAt != null &&
-        currentDebug.state?.cacheTime
+        currentDebug.state?.gcTime != null
       ) {
-        addLog(`[GC] scheduled for ${(currentDebug.state.cacheTime / 1000).toFixed(0)} sec`)
+        addLog(`[GC] scheduled for ${(currentDebug.state.gcTime / 1000).toFixed(0)} sec`)
       }
 
       if (previousSnapshot.isPresent && !currentSnapshot.isPresent) {

@@ -148,9 +148,9 @@ export function useQueryDebugCard<TData extends { requestId?: number; value?: nu
     if (
       previousSnapshot.gcExpiresAt == null &&
       currentSnapshot.gcExpiresAt != null &&
-      debug.state?.cacheTime
+      debug.state?.gcTime != null
     ) {
-      addLog(`[GC] scheduled for ${(debug.state.cacheTime / 1000).toFixed(0)} sec`)
+      addLog(`[GC] scheduled for ${(debug.state.gcTime / 1000).toFixed(0)} sec`)
     }
 
     if (previousSnapshot.isPresent && !currentSnapshot.isPresent) {
@@ -164,7 +164,7 @@ export function useQueryDebugCard<TData extends { requestId?: number; value?: nu
     debug.data?.value,
     debug.hasPromise,
     debug.isPresent,
-    debug.state?.cacheTime,
+    debug.state?.gcTime,
     debug.state?.gcExpiresAt
   ])
 

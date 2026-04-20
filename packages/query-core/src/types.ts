@@ -4,7 +4,10 @@ export type QueryPolicy = 'static' | 'normal' | 'background' | 'critical'
 
 export type QueryListener = () => void
 
+export type QueryExecutor<TData> = () => Promise<TData>
+
 export type QueryState<TData = unknown> = {
+  key: readonly unknown[]
   data?: TData
   status: QueryStatus
   error?: unknown
@@ -12,7 +15,10 @@ export type QueryState<TData = unknown> = {
   staleTime: number
   observers: number
   promise?: Promise<TData>
-  cacheTime: number
+  gcTime: number
+  fetcher: QueryExecutor<TData>
+  refetchOnMount: boolean
+  refetchOnWindowFocus: boolean
   gcTimeoutId?: ReturnType<typeof setTimeout>
   gcScheduledAt?: number
   gcExpiresAt?: number
@@ -20,17 +26,22 @@ export type QueryState<TData = unknown> = {
   revision: number
 }
 
-export type QueryDefinition<TData> = {
+export type QueryDefinition<TQueryFnData, TData = TQueryFnData> = {
   key: readonly unknown[]
-  fetcher: () => Promise<TData>
+  fetcher: () => Promise<TQueryFnData>
+  select?: (data: TQueryFnData) => TData
   policy: QueryPolicy
   config?: Partial<QueryPolicyConfig>
 }
 
 export type QueryPolicyConfig = {
   staleTime: number
-  cacheTime: number
-  autoRefetch: boolean
+  gcTime: number
+  refetchOnMount: boolean
+  refetchOnWindowFocus: boolean
 }
 
-export type QueryStateConfig = Pick<QueryState, 'staleTime' | 'cacheTime'>
+export type QueryStateConfig<TData> = Pick<
+  QueryState<TData>,
+  'staleTime' | 'gcTime' | 'fetcher' | 'refetchOnMount' | 'refetchOnWindowFocus'
+>

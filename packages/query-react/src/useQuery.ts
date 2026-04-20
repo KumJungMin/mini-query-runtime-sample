@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import {
+  createQueryStateConfig,
   fetchQuery,
   getOrCreateState,
   mountQueryObserver,
@@ -23,9 +24,17 @@ function createSnapshot<TData>(state: QueryState<TData>): QuerySnapshot<TData> {
   }
 }
 
-export function useQuery<TData>(queryDefinition: QueryDefinition<TData>) {
-  const config = resolveQueryConfig(queryDefinition.policy, queryDefinition.config)
-  const state = getOrCreateState<TData>(queryDefinition.key, config)
+export function useQuery<TQueryFnData, TData>(
+  queryDefinition: QueryDefinition<TQueryFnData, TData>
+) {
+  const resolvedConfig = resolveQueryConfig(
+    queryDefinition.policy,
+    queryDefinition.config
+  )
+  const state = getOrCreateState(
+    queryDefinition,
+    createQueryStateConfig(queryDefinition, resolvedConfig)
+  )
 
   useSyncExternalStore(
     (onStoreChange) => subscribeToQuery(state, onStoreChange),
@@ -36,15 +45,15 @@ export function useQuery<TData>(queryDefinition: QueryDefinition<TData>) {
   const snapshot = createSnapshot(state)
 
   useEffect(() => {
-    mountQueryObserver(queryDefinition, state)
+    mountQueryObserver(state)
 
     return () => {
-      unmountQueryObserver(state, queryDefinition.key)
+      unmountQueryObserver(state)
     }
-  }, [queryDefinition, state])
+  }, [state])
 
   return {
     ...snapshot,
-    refetch: () => fetchQuery(state, queryDefinition.fetcher)
+    refetch: () => fetchQuery(state)
   }
 }

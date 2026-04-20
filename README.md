@@ -1,360 +1,217 @@
 # Mini Query Runtime
 
-A minimal query runtime system inspired by React Query, built to explain the core mechanics without hiding them behind a large framework abstraction.
+A small query runtime inspired by React Query, with a framework-agnostic core and thin React/Vue adapters.
 
-## What This Project Is
+## What This Project Focuses On
 
-This repository is a small, framework-aware data query runtime with a framework-agnostic core.
+This repository keeps the runtime model explicit:
 
-It includes:
+- `queryKey` identifies shared state
+- `QueryDefinition` describes fetch + select + policy
+- `QueryState` stores runtime data and observer lifecycle
+- `promise` dedupe prevents duplicate in-flight requests
+- `staleTime` controls freshness
+- `gcTime` controls unused-state cleanup
+- `refetchOnMount` and `refetchOnWindowFocus` drive event-based synchronization
 
-- A pure TypeScript core for query state, freshness checks, fetch deduplication, and cache garbage collection
-- A React `useQuery` hook
-- A Vue `useQuery` hook
-- A small sample query and entry file for runtime experimentation
+The goal is clarity, not feature completeness.
 
-The goal is not to re-create all of React Query. The goal is to make the runtime model easy to read, reason about, and extend.
+## Core Model
 
-## Why This Project Exists
+### `QueryDefinition`
 
-Most production query libraries are powerful, but their internals can feel opaque when you are learning how cache state, stale checks, and request deduplication work.
+```ts
+type QueryDefinition<TQueryFnData, TData = TQueryFnData> = {
+  key: readonly unknown[]
+  fetcher: () => Promise<TQueryFnData>
+  select?: (data: TQueryFnData) => TData
+  policy: QueryPolicy
+  config?: Partial<QueryPolicyConfig>
+}
+```
 
-This repository exists to make those internals explicit:
-
-- Why data is fetched
-- When cached data is considered stale
-- How duplicate in-flight requests are prevented
-- Why unused cache entries are eventually removed
-- How UI frameworks connect to the runtime without owning the core logic
-
-It is intentionally small so developers can study the design and migrate the ideas into a larger architecture later.
-
-## Problems This Project Solves
-
-Without a query runtime, UI code often ends up with:
-
-- Repeated fetch logic inside components
-- Duplicate requests for the same resource
-- No shared understanding of cached vs stale data
-- Ad hoc loading and error handling
-- Memory that grows because old results are never cleaned up
-
-This project solves those problems with a few explicit runtime rules:
-
-- `queryKey` identifies one logical piece of data
-- `QueryDefinition` defines how that data is fetched
-- `QueryState` stores the shared runtime state
-- `promise` deduplication prevents duplicate in-flight requests
-- `observers` track active usage from the UI
-- `cacheTime` removes unused cache entries later
-- `ensureFresh` can guarantee freshness before important actions
-
-## Core Concepts
-
-### `queryKey`
-
-`queryKey` is the identity of the data.
-
-It does:
-
-- identify one query in the store
-- decide which cache entry is reused
-
-It does not:
-
-- decide whether data is stale
-- decide when to refetch
+`fetcher` returns raw server data.
+`select` maps that raw payload into the data shape consumed by the UI.
 
 Example:
 
 ```ts
-['api1']
-```
-
-This project intentionally treats `queryKey` as identity only.
-
-### `QueryDefinition`
-
-A `QueryDefinition` bundles the query identity, fetch logic, and policy.
-
-```ts
 export const API1_QUERY = {
   key: ['api1'] as const,
   fetcher: fetchApi1,
+  select: (data) => data.payment,
   policy: 'normal'
 }
 ```
 
-This keeps query metadata outside the UI layer.
+### `QueryPolicyConfig`
+
+```ts
+type QueryPolicyConfig = {
+  staleTime: number
+  gcTime: number
+  refetchOnMount: boolean
+  refetchOnWindowFocus: boolean
+}
+```
+
+`staleTime` answers: "Is cached data still fresh?"
+`gcTime` answers: "How long should unused state remain in memory?"
 
 ### `QueryState`
 
-`QueryState` is the in-memory runtime record for one query.
+Each query keeps runtime state such as:
 
-It stores:
-
-- current `data`
-- `status` such as `idle`, `loading`, `success`, or `error`
+- selected `data`
+- `status`
 - `error`
 - `lastFetchedAt`
 - `staleTime`
-- `cacheTime`
-- active `observers`
-- current in-flight `promise`
+- `gcTime`
+- `observers`
+- in-flight `promise`
+- resolved `fetcher`
+- `refetchOnMount`
+- `refetchOnWindowFocus`
 
-The hooks read from this state. The core mutates it.
+The UI reads this state. The core owns the state transitions.
 
-### `staleTime`
+## Runtime Flow
 
-`staleTime` controls freshness.
+### Mount
 
-- If data is still within `staleTime`, it is treated as fresh.
-- If data is older than `staleTime`, it is stale and may be refetched.
+When `useQuery(queryDefinition)` mounts:
 
-This answers: "Should the runtime trust the cached data?"
-
-### `cacheTime`
-
-`cacheTime` controls memory cleanup.
-
-- If no one is observing a query, the runtime schedules garbage collection.
-- When `cacheTime` passes, the cached state can be removed.
-
-This answers: "How long should unused query state stay in memory?"
-
-### `observers`
-
-`observers` count how many active UI consumers are using the query.
-
-- mount: increment
-- unmount: decrement
-- when the count reaches `0`, GC can be scheduled
-
-This lets the runtime separate active usage from passive cache storage.
-
-### `promise` dedupe
-
-If a fetch is already running, the state stores the in-flight `promise`.
-
-Any later request for the same query returns the same promise instead of starting another network call.
-
-This is the core deduplication rule.
-
-### `ensureFresh`
-
-`ensureFresh` is an explicit freshness guard.
-
-- `useQuery` reads and subscribes to state from the UI
-- `ensureFresh` guarantees freshness before an important action
-
-That distinction is intentional. Reads and actions are not the same concern.
-
-## How the Runtime Works
-
-### When `useQuery` mounts
-
-When a React or Vue component calls `useQuery(queryDef)`:
-
-1. the runtime resolves the shared `QueryState` from the store
+1. the runtime resolves or creates a shared `QueryState`
 2. observer count increases
-3. any pending GC timer is canceled
-4. the runtime checks whether the query should auto-refetch
-5. the hook subscribes to state updates and renders the latest snapshot
+3. any scheduled GC timer is canceled
+4. if the query has never fetched, it fetches immediately
+5. otherwise, if the query is stale and `refetchOnMount` is true, it refetches
 
-### How stale data is checked
+This keeps initial fetch and stale remount behavior separate.
 
-The core compares:
+### Window Focus
 
-- `Date.now()`
-- `state.lastFetchedAt`
-- `state.staleTime`
+When the browser window regains focus, the runtime checks active queries:
 
-If the data has never been fetched, it is treated as stale.  
-If enough time has passed, it is also stale.
+- `observers > 0`
+- `refetchOnWindowFocus === true`
+- query is stale
 
-### When fetch happens
+If all three conditions match, the query refetches.
 
-Fetch runs when:
+### Manual Refetch
 
-- the query is stale and the policy enables auto refetch on mount
-- `refetch()` is called
-- `ensureFresh(...)` decides the query must be refreshed before an action
-
-### How duplicate requests are prevented
-
-`fetchQuery` stores the current promise in `state.promise`.
-
-If another request arrives before the first one finishes:
-
-- the runtime returns the same promise
-- no second fetch starts
-
-This is promise-based deduplication.
-
-### What happens on unmount
-
-When a component unmounts:
-
-1. observer count decreases
-2. if the count becomes `0`, the runtime schedules garbage collection using `cacheTime`
-
-The cached data is still available for a while. That is what creates a warm cache.
-
-### How GC works
-
-GC does not remove state immediately when a component unmounts.
-
-Instead:
-
-1. the runtime sets a timeout
-2. if no observer comes back before the timeout finishes, the query is removed from the store
-3. if an observer returns in time, the scheduled GC is canceled
-
-This balances reuse and memory cleanup.
-
-### What "warm cache" means
-
-A warm cache means:
-
-- the component that used the query may be gone
-- but the query state is still in memory
-- so a later mount can reuse the cached result immediately
-
-Warm cache is controlled by `cacheTime`, not `staleTime`.
-
-## Usage Examples
-
-### Define a query
+`refetch()` always routes through the same `fetchQuery` path, so dedupe still works:
 
 ```ts
-import { fetchApi1 } from '../api/api1'
+const { refetch } = useQuery(API1_QUERY)
 
-export const API1_QUERY = {
-  key: ['api1'] as const,
-  fetcher: fetchApi1,
-  policy: 'normal'
-}
+await refetch()
 ```
 
-### React `useQuery`
+If a request is already in flight, later calls reuse `state.promise`.
+
+### Unmount and GC
+
+When the last observer leaves:
+
+1. observer count drops to `0`
+2. the runtime schedules garbage collection using `gcTime`
+3. if nothing remounts before the timer expires, the query state is removed
+
+This is what creates a warm cache.
+
+## Usage
+
+### React
 
 ```ts
-const { data, isLoading } = useQuery(API1_QUERY)
+const { data, isLoading, refetch } = useQuery(API1_QUERY)
 ```
 
-### Vue `useQuery`
+### Vue
 
 ```ts
-const { data, isLoading } = useQuery(API1_QUERY)
+const { data, isLoading, refetch } = useQuery(API1_QUERY)
 ```
 
 In Vue, `data` and `isLoading` are refs.
 
-### `ensureFresh`
+### Preload with `refetch()`
 
-Conceptual usage:
-
-```ts
-await ensureFresh(API1_QUERY)
-```
-
-Current low-level usage in this repository:
+For non-UI orchestration, the low-level core path is:
 
 ```ts
-const config = policyMap[API1_QUERY.policy]
-const state = getOrCreateState(API1_QUERY.key, config)
+const resolvedConfig = resolveQueryConfig(
+  PRELOAD_EXAMPLE_QUERY.policy,
+  PRELOAD_EXAMPLE_QUERY.config
+)
 
-await ensureFresh(API1_QUERY, state)
+const state = getOrCreateState(
+  PRELOAD_EXAMPLE_QUERY,
+  createQueryStateConfig(PRELOAD_EXAMPLE_QUERY, resolvedConfig)
+)
+
+const refetch = () => fetchQuery(state)
+
+await refetch()
 ```
 
-### Before a critical action
+This warms the cache through the same `refetch()`-driven fetch path used by the runtime.
 
-Conceptual flow:
-
-```ts
-await ensureFresh(API1_QUERY)
-router.push('/account-change')
-```
-
-Current low-level flow:
-
-```ts
-const config = policyMap[API1_QUERY.policy]
-const state = getOrCreateState(API1_QUERY.key, config)
-
-await ensureFresh(API1_QUERY, state)
-router.push('/account-change')
-```
-
-Use this pattern when navigation, mutation, or another important action should not continue with stale data.
-
-## Important Design Decisions
-
-### Explicit freshness control
-
-Freshness is not magical. The core checks freshness from `lastFetchedAt` and `staleTime`.
+## Design Notes
 
 ### `queryKey` is identity only
 
-`queryKey` identifies cached data. It is not a refetch condition system.
+`queryKey` decides which shared state is reused.
+It does not decide freshness or refetch timing.
 
-### `ensureFresh` is manual, not automatic
+### `staleTime` does not fetch by itself
 
-`ensureFresh` is reserved for important action boundaries, preload steps, or orchestration code.
+When data becomes stale, nothing happens immediately.
 
-This keeps intent explicit:
+Refetch only happens on explicit events:
 
-- `useQuery` reads data
-- `ensureFresh` guarantees freshness
+- first mount
+- stale remount with `refetchOnMount`
+- window focus with `refetchOnWindowFocus`
+- manual `refetch()`
 
-### `cacheTime` manages memory
+### `gcTime` is separate from freshness
 
-Unused state remains reusable for a period of time, then gets removed.
+Stale data can still remain in memory.
+Freshness and memory cleanup are different concerns.
 
-That trade-off keeps cache useful without growing forever.
+### Critical flows may need stronger guarantees
 
-## Trade-Offs / Limitations
+This runtime now favors event-based synchronization over ad hoc freshness guards.
 
-This project intentionally chooses clarity over feature completeness.
+That makes the model simpler, but it does not automatically guarantee correctness for sensitive flows such as payments or account changes. Those cases may still need a higher-level orchestration layer that explicitly validates or refreshes data before continuing.
 
-Current limitations include:
+## Limitations
 
-- no retries
-- no cancellation
-- no mutation system
-- no invalidation API
-- no pagination or infinite query support
-- no background refetch intervals
-- no SSR hydration model
-- no persistence layer
+This project intentionally leaves out:
 
-The hooks are intentionally thin. More advanced orchestration should live in the core, not in React or Vue components.
+- retries
+- cancellation
+- invalidation
+- mutations
+- polling
+- SSR hydration
+- persistence
 
-## Future Direction
-
-A likely migration path for this repository is:
-
-1. keep the current core framework-agnostic
-2. add a public query client or orchestrator layer
-3. move explicit state resolution behind higher-level APIs
-4. introduce invalidation and mutations
-5. support prefetch, server rendering, and persistence
-
-That direction keeps the clean architecture boundary intact:
-
-- framework adapters in the presentation layer
-- runtime logic in the core/domain-oriented layer
+The adapters stay thin on purpose. More complex orchestration should live in the core, not inside React or Vue components.
 
 ## Summary
 
-This project is a teaching-friendly query runtime with a small but explicit design:
+This repository demonstrates a small runtime with explicit rules:
 
-- `useQuery` reads data
-- `ensureFresh` guards important actions
-- `queryKey` identifies data
+- `select` shapes API data outside the UI
+- `refetch()` is the manual fetch entry point
+- `refetchOnMount` and `refetchOnWindowFocus` handle stale synchronization
 - `staleTime` controls freshness
-- `cacheTime` controls memory cleanup
+- `gcTime` controls memory cleanup
 - `promise` dedupe prevents duplicate requests
-- `observers` track active usage
 
-If you want to understand how a query system works internally before adopting or designing a larger one, this repository is the starting point.
+It is meant to be read, extended, and used as a teaching-friendly architecture reference.
