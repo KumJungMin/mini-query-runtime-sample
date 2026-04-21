@@ -1,57 +1,35 @@
 import type { QueryState } from './types.js'
 import { getQueryKeyString, queryMap } from './queryStore.js'
 
-type TimerHandleWithUnref = {
-  unref: () => void
-}
-
+/** 
+ * scheduleGC 함수
+ * - QueryState 객체를 받아서 GC를 예약하는 함수입니다.
+ * - gcTime이 유한한 경우에는 gcTime 후에 GC가 실행되도록 예약합니다.
+ * */ 
 export function scheduleGC(state: QueryState): void {
-  const keyString = getQueryKeyString(state.key)
-
   cancelScheduledGC(state)
 
   if (state.gcTime === Infinity) {
     state.gcTimeoutId = undefined
     state.gcScheduledAt = undefined
     state.gcExpiresAt = undefined
-    return
+  } else {
+    state.gcScheduledAt = Date.now()
+    state.gcExpiresAt = state.gcScheduledAt + state.gcTime
+    const keyString = getQueryKeyString(state.key)
+
+    state.gcTimeoutId = setTimeout(() => {
+      if (state.observers === 0) {
+        queryMap.delete(keyString)
+      }
+    }, state.gcTime)
   }
-
-  state.gcScheduledAt = Date.now()
-  state.gcExpiresAt = state.gcScheduledAt + state.gcTime
-  state.gcTimeoutId = setTimeout(() => {
-    if (state.observers === 0) {
-      queryMap.delete(keyString)
-    }
-  }, state.gcTime)
-
-  detachTimerIfPossible(state.gcTimeoutId)
 }
 
 export function cancelScheduledGC(state: QueryState): void {
-  if (!state.gcTimeoutId) {
-    state.gcScheduledAt = undefined
-    state.gcExpiresAt = undefined
-    return
-  }
+  if (state.gcTimeoutId) clearTimeout(state.gcTimeoutId)
 
-  clearTimeout(state.gcTimeoutId)
   state.gcTimeoutId = undefined
   state.gcScheduledAt = undefined
   state.gcExpiresAt = undefined
-}
-
-function detachTimerIfPossible(timeoutId: ReturnType<typeof setTimeout>): void {
-  if (hasUnref(timeoutId)) {
-    timeoutId.unref()
-  }
-}
-
-function hasUnref(timeoutId: unknown): timeoutId is TimerHandleWithUnref {
-  return (
-    typeof timeoutId === 'object' &&
-    timeoutId !== null &&
-    'unref' in timeoutId &&
-    typeof (timeoutId as TimerHandleWithUnref).unref === 'function'
-  )
 }

@@ -19,9 +19,9 @@ function createQueryFetcher<TQueryFnData, TData>(
 
     if (queryDefinition.select) {
       return queryDefinition.select(rawData)
+    } else {
+      return rawData as TData
     }
-
-    return rawData as TData
   }
 }
 
@@ -38,25 +38,25 @@ export function getOrCreateState<TQueryFnData, TData>(
     existingState.fetcher = config.fetcher
     existingState.refetchOnMount = config.refetchOnMount
     existingState.refetchOnWindowFocus = config.refetchOnWindowFocus
+
     return existingState as QueryState<TData>
+  } else {
+    const state: QueryState<TData> = {
+      key: queryDefinition.key,
+      status: 'idle',
+      lastFetchedAt: 0,
+      staleTime: config.staleTime,
+      gcTime: config.gcTime,
+      observers: 0,
+      fetcher: config.fetcher,
+      refetchOnMount: config.refetchOnMount,
+      refetchOnWindowFocus: config.refetchOnWindowFocus,
+      listeners: new Set(),
+      revision: 0
+    }
+    queryMap.set(keyString, state)
+    return state
   }
-
-  const state: QueryState<TData> = {
-    key: queryDefinition.key,
-    status: 'idle',
-    lastFetchedAt: 0,
-    staleTime: config.staleTime,
-    gcTime: config.gcTime,
-    observers: 0,
-    fetcher: config.fetcher,
-    refetchOnMount: config.refetchOnMount,
-    refetchOnWindowFocus: config.refetchOnWindowFocus,
-    listeners: new Set(),
-    revision: 0
-  }
-
-  queryMap.set(keyString, state)
-  return state
 }
 
 export function getExistingState<TData>(

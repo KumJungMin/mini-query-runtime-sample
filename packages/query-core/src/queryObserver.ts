@@ -12,16 +12,10 @@ export function mountQueryObserver<TData>(state: QueryState<TData>): void {
   cancelScheduledGC(state)
   acquireWindowFocusRefetch()
 
-  if (!hasFetchedQuery(state)) {
-    void fetchQuery(state).catch(() => undefined)
-    return
+  if (!hasFetchedQuery(state) || (state.refetchOnMount && isQueryStale(state))) {
+    fetchQuery(state)
   }
-
-  if (!state.refetchOnMount || !isQueryStale(state)) {
-    return
-  }
-
-  void fetchQuery(state).catch(() => undefined)
+  
 }
 
 export function unmountQueryObserver(state: QueryState): void {
